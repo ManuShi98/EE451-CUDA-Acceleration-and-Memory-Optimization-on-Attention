@@ -1,12 +1,22 @@
 # EE451-CUDA-Acceleration-and-Memory-Optimization-on-Attention
 ## Setup in CARC
-A100 GPU is required.
+Post-Ampere GPUs is required for triton.
 ```bash
-module purge
-module load gcc/11.3.0
-module load python/3.9.12
-salloc --partition=gpu --gres=gpu:a100:1 --time=01:00:00
-module load nvidia-hpc-sdk
+conda init bash
+source ~/.bashrc
+mamba create --name triton
+conda activate triton
 pip install triton
 
+module purge
+module load conda
+module load gcc/11.3.0 
+module load cmake/3.23.2
+module load tmux/3.3a
+module load cuda/11.6.2
+module load cudnn/8.4.0.27-11.6
+module load git/2.36.1
+
+
 ```
+
