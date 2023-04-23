@@ -78,5 +78,5 @@ torch::Tensor block_matmul_cuda(
             batch_size * head_num * n * k
         );
     }));
-    return output
+    return output;
 }
