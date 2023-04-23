@@ -32,25 +32,25 @@ __global__ void matmul(
     float local = 0;
     int my_x = blockIdx.y*blockDim.y + threadIdx.y;
 	int my_y = blockIdx.x*blockDim.x + threadIdx.x;	
-    int batch = my_x/(head_num*((token_num+BLOCK_SIZE-1)/BLOCK_SIZE));
-    int head = (my_x%(head_num*((token_num+BLOCK_SIZE-1)/BLOCK_SIZE)))/((token_num+BLOCK_SIZE-1)/BLOCK_SIZE);
+    int batch = my_x/(head_num*((n+BLOCK_SIZE-1)/BLOCK_SIZE));
+    int head = (my_x%(head_num*((n+BLOCK_SIZE-1)/BLOCK_SIZE)))/((n+BLOCK_SIZE-1)/BLOCK_SIZE);
     if (my_x*n+my_y >= limit) {
         return;
     }
 
-    __shared__ A_shared[share_sz][share_sz];
-    __shared__ B_shared[share_sz][share_sz];
+    __shared__ float A_shared[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float B_shared[BLOCK_SIZE][BLOCK_SIZE];
 
     for(int i = 0; i < (m+BLOCK_SIZE-1)/BLOCK_SIZE; i++) {
         A_shared[row][col] = mat1[batch][head][my_x][i*blockDim.y+col];
         B_shared[row][col] = mat2[batch][head][i*blockDim.x+row][my_y];
         __syncthreads();
         for(int j = 0; j < BLOCK_SIZE; j++){
-            local+=A_s[row][j]*B_s[j][col];
+            local+=A_shared[row][j]*B_shared[j][col];
         }
         __syncthreads();
     }
-    output[my_x][my_y] = local;
+    output[batch][head][my_x][my_y] = local;
 }
 
 torch::Tensor block_matmul_cuda(
