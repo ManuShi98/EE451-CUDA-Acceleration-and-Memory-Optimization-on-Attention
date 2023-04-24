@@ -27,30 +27,41 @@ __global__ void matmul(
     int m,
     int k, 
     int limit) {
-    int row = threadIdx.y;
-    int col = threadIdx.x;
+    int row = threadIdx.y;//32
+    int col = threadIdx.x;//32
     float local = 0;
-    int my_x = blockIdx.y*blockDim.y + threadIdx.y;
-	int my_y = blockIdx.x*blockDim.x + threadIdx.x;	
-    int batch = my_x/(head_num*((n+BLOCK_SIZE-1)/BLOCK_SIZE));
-    int head = (my_x%(head_num*((n+BLOCK_SIZE-1)/BLOCK_SIZE)))/((n+BLOCK_SIZE-1)/BLOCK_SIZE);
-    if (my_x*n+my_y >= limit) {
-        return;
-    }
+    int idx = blockIdx.x;
+    int batch = (idx/(n*k/(BLOCK_SIZE*BLOCK_SIZE)))/head_num;
+    int head = (idx/(n*k/(BLOCK_SIZE*BLOCK_SIZE)))%head_num;
+    int my_x = ((idx/(k/BLOCK_SIZE))%(n/BLOCK_SIZE))*BLOCK_SIZE;
+    int my_y = (idx%(k/BLOCK_SIZE))*BLOCK_SIZE;
+    //if (idx*BLOCK_SIZE*BLOCK_SIZE+row*m+col >= limit) {
+    //    return;
+    //}
 
     __shared__ float A_shared[BLOCK_SIZE][BLOCK_SIZE];
     __shared__ float B_shared[BLOCK_SIZE][BLOCK_SIZE];
 
     for(int i = 0; i < (m+BLOCK_SIZE-1)/BLOCK_SIZE; i++) {
-        A_shared[row][col] = mat1[batch][head][my_x][i*blockDim.y+col];
-        B_shared[row][col] = mat2[batch][head][i*blockDim.x+row][my_y];
+        if(my_x+row<n&&col+i*BLOCK_SIZE<m){
+            A_shared[row][col] = mat1[batch][head][my_x+row][col+i*BLOCK_SIZE];
+        } else {
+            A_shared[row][col] = 0.0;
+        }
+        if(row+i*BLOCK_SIZE<m&&my_y+col<k) {
+            B_shared[row][col] = mat2[batch][head][row+i*BLOCK_SIZE][my_y+col];
+        } else {
+            B_shared[row][col] = 0.0;
+        }
         __syncthreads();
         for(int j = 0; j < BLOCK_SIZE; j++){
             local+=A_shared[row][j]*B_shared[j][col];
         }
         __syncthreads();
     }
-    output[batch][head][my_x][my_y] = local;
+    if(my_x+row<n&&my_y+col<k) {
+        output[batch][head][my_x+row][my_y+col] = local;
+    }
 }
 
 torch::Tensor block_matmul_cuda(
@@ -63,8 +74,8 @@ torch::Tensor block_matmul_cuda(
     int k) {
     
     auto output = torch::empty({batch_size, head_num, n, k}, torch::CUDA(torch::kFloat));
-    dim3 dimBlock = (BLOCK_SIZE, BLOCK_SIZE);
-    dim3 dimGrid = (batch_size*head_num*((n+dimBlock.x-1)/dimBlock.x), batch_size*head_num*((k+dimBlock.y-1)/dimBlock.y));
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimGrid((batch_size*head_num*n*k+dimBlock.x*dimBlock.y-1)/(dimBlock.x*dimBlock.y));
     AT_DISPATCH_FLOATING_TYPES(mat1.type(), "attention_forward_cuda", ([&]{
         matmul<scalar_t><<<dimGrid, dimBlock>>>(
             mat1.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),

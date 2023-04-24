@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-b', '--batch-size', type=int, default=4)
 parser.add_argument('--head_num', type=int, default=8)
-parser.add_argument('-t', '--token_num', type=int, default=16)
+parser.add_argument('-t', '--token_num', type=int, default=32)
 parser.add_argument('-f', '--features', type=int, default=128)
 parser.add_argument('-r', '--runs', type=int, default=100)
 parser.add_argument('--scale', choices=['s', 'ms', 'us'], default='us')
@@ -22,7 +22,7 @@ parser.add_argument('-d', '--double', action='store_true')
 options = parser.parse_args()
 
 
-from attention_cuda import ATTENTION
+from attention import ATTENTION
 
 
 device = torch.device("cuda") if options.cuda else torch.device("cpu")

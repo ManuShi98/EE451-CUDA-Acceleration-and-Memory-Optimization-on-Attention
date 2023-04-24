@@ -26,7 +26,7 @@ std::vector<torch::Tensor> attention_forward(
     const auto head_num = q.size(1);
     const auto token_num = q.size(2);
     const auto features = q.size(3);
-    auto qk = block_matmul_cuda(q, k, batch_size, head_num, token_num, features, token_num)/ std::sqrt(features);
+    auto qk = block_matmul_cuda(q, k.transpose(-2, -1), batch_size, head_num, token_num, features, token_num)/ std::sqrt(features);
     auto attention_weights = qk.softmax(-1);
     auto output = block_matmul_cuda(attention_weights, v, batch_size, head_num, token_num, token_num, features);
 
@@ -51,16 +51,16 @@ std::vector<torch::Tensor> attention_backward(
     const auto head_num = q.size(1);
     const auto token_num = q.size(2);
     const auto features = q.size(3);
-    auto grad_v = block_matmul_cuda(attention_weights.transpose(-2, -1), grad_output, batch_size, head_num, token_num, token_num, grad_output.size(3));
-    auto grad_softmax_qk = block_matmul_cuda(grad_output, v.transpose(-2, -1), batch_size, head_num, grad_output.size(2), features, token_num);
+    auto grad_v = block_matmul_cuda(attention_weights.transpose(-2, -1), grad_output, batch_size, head_num, token_num, token_num, features);
+    auto grad_softmax_qk = block_matmul_cuda(grad_output, v.transpose(-2, -1), batch_size, head_num, token_num, features, token_num);
     auto grad_qk =  grad_softmax_qk*attention_weights - attention_weights*torch::sum(grad_softmax_qk*attention_weights, -1, true);
     grad_qk = grad_qk/std::sqrt(features);
-    auto grad_q = block_matmul_cuda(grad_qk, k, batch_size, head_num, grad_qk.size(2), token_num, features);
-    auto grad_k = block_matmul_cuda(grad_qk.transpose(-2, -1), q, batch_size, head_num, grad_qk.size(2), token_num, features);
+    auto grad_q = block_matmul_cuda(grad_qk, k, batch_size, head_num, token_num, token_num, features);
+    auto grad_k = block_matmul_cuda(grad_qk.transpose(-2, -1), q, batch_size, head_num, token_num, token_num, features);
     return {grad_q, grad_k, grad_v};
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("forward", &attention_forward, "Attention forward (CUDA)");
-  m.def("backward", &attention_backward, "Attention backward (CUDA)");
+  m.def("forward", &attention_forward, "ATTENTION forward (CUDA)");
+  m.def("backward", &attention_backward, "ATTENTION backward (CUDA)");
 }
