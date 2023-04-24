@@ -25,8 +25,8 @@ only first time
     conda install nltk matplotlib
 conda activate triton
 
-
 ```
+sometimes it does not enter the conda environment, conda deactivate and activate environment.
 
 download dataset from https://www.kaggle.com/datasets/bittlingmayer/amazonreviews, unzip them into ./data
 prepare_npy.py, benchmark_train_*.py edited from https://github.com/iamirmasoud/amazon_sentiment/tree/main
@@ -35,6 +35,6 @@ Execute in order:
 ```
 mkdir data
 python prepare_npy.py
-python benchmark_train_*.py
+python benchmark_train.py --attention_type cpp/cuda/fused
 ```
 
