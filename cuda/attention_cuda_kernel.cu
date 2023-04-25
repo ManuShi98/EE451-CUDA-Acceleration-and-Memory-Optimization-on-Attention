@@ -5,6 +5,7 @@
 #include <math.h>
 
 #include <vector>
+#include <cuda_fp16.h>
 
 const int BLOCK_SIZE = 32;
 
@@ -29,7 +30,7 @@ __global__ void matmul(
     int limit) {
     int row = threadIdx.y;//32
     int col = threadIdx.x;//32
-    float local = 0;
+    half local = __float2half(0);
     int idx = blockIdx.x;
     int batch = (idx/(n*k/(BLOCK_SIZE*BLOCK_SIZE)))/head_num;
     int head = (idx/(n*k/(BLOCK_SIZE*BLOCK_SIZE)))%head_num;
@@ -38,29 +39,29 @@ __global__ void matmul(
     //if (idx*BLOCK_SIZE*BLOCK_SIZE+row*m+col >= limit) {
     //    return;
     //}
-
-    __shared__ float A_shared[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ float B_shared[BLOCK_SIZE][BLOCK_SIZE];
+        
+    __shared__ half A_shared[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ half B_shared[BLOCK_SIZE][BLOCK_SIZE];
 
     for(int i = 0; i < (m+BLOCK_SIZE-1)/BLOCK_SIZE; i++) {
         if(my_x+row<n&&col+i*BLOCK_SIZE<m){
-            A_shared[row][col] = mat1[batch][head][my_x+row][col+i*BLOCK_SIZE];
+            A_shared[row][col] = __float2half(mat1[batch][head][my_x+row][col+i*BLOCK_SIZE]);
         } else {
-            A_shared[row][col] = 0.0;
+            A_shared[row][col] = __float2half(0.0);
         }
         if(row+i*BLOCK_SIZE<m&&my_y+col<k) {
-            B_shared[row][col] = mat2[batch][head][row+i*BLOCK_SIZE][my_y+col];
+            B_shared[row][col] = __float2half(mat2[batch][head][row+i*BLOCK_SIZE][my_y+col]);
         } else {
-            B_shared[row][col] = 0.0;
+            B_shared[row][col] = __float2half(0.0);
         }
         __syncthreads();
         for(int j = 0; j < BLOCK_SIZE; j++){
-            local+=A_shared[row][j]*B_shared[j][col];
+            local=__hadd(local, __hmul(A_shared[row][j], B_shared[j][col]));
         }
         __syncthreads();
     }
     if(my_x+row<n&&my_y+col<k) {
-        output[batch][head][my_x+row][my_y+col] = local;
+        output[batch][head][my_x+row][my_y+col] = 	__half2float(local);
     }
 }
 
@@ -73,10 +74,11 @@ torch::Tensor block_matmul_cuda(
     int m,
     int k) {
     
-    auto output = torch::empty({batch_size, head_num, n, k}, torch::CUDA(torch::kFloat));
+    auto output = torch::empty({batch_size, head_num, n, k}, torch::CUDA(torch::kFloat16));
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid((batch_size*head_num*n*k+dimBlock.x*dimBlock.y-1)/(dimBlock.x*dimBlock.y));
-    AT_DISPATCH_FLOATING_TYPES(mat1.type(), "attention_forward_cuda", ([&]{
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(mat1.type(), "attention_forward_cuda", ([&]{
+        
         matmul<scalar_t><<<dimGrid, dimBlock>>>(
             mat1.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
             mat2.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
@@ -88,6 +90,7 @@ torch::Tensor block_matmul_cuda(
             k,
             batch_size * head_num * n * k
         );
+        
     }));
     return output;
 }
