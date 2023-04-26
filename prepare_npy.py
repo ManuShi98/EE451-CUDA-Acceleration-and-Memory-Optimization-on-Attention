@@ -135,6 +135,7 @@ def pad_input(sentences, seq_len):
 
 seq_len = 256  # The length that the sentences will be padded/shortened to
 
+
 train_sentences = pad_input(train_sentences, seq_len)
 test_sentences = pad_input(test_sentences, seq_len)
 

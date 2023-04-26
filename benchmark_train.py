@@ -85,12 +85,14 @@ if args.attention_type == "cpp":
 elif args.attention_type == "cuda":
     from cuda.attention import ATTENTION
 elif args.attention_type == "fused":
+
     from fused.fused_attention import attention
+
 
 
 class FUSED_ATTENTION(nn.Module):
     def __init__(self):
-        super(FUSED_ATTENTION, self).__init__()
+        super(FUSED_ATTENTION, self).__init__(
 
     def forward(self, q, k, v):
         return attention(q, k, v, q.size(-1))
@@ -142,7 +144,9 @@ class SentimentNet(nn.Module):
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
         start.record()
+
         att_out = self.att(embeds, embeds, embeds)
+
         end.record()
         torch.cuda.synchronize()
         elapsed_time = start.elapsed_time(end)

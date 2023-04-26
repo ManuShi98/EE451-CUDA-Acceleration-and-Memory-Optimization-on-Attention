@@ -25,7 +25,6 @@ only first time
     pip install triton
     conda install nltk matplotlib jupyter
 
-
 ```
 sometimes it does not enter the conda environment, conda deactivate and activate environment.
 
