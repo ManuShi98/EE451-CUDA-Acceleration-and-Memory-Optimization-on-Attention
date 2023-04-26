@@ -12,9 +12,9 @@ TIME_SCALES = {'s': 1, 'ms': 1000, 'us': 1000000}
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-b', '--batch-size', type=int, default=4)
-parser.add_argument('--head_num', type=int, default=8)
-parser.add_argument('-t', '--token_num', type=int, default=32)
-parser.add_argument('-f', '--features', type=int, default=128)
+parser.add_argument('--head_num', type=int, default=48)
+parser.add_argument('-t', '--token_num', type=int, default=128)
+parser.add_argument('-f', '--features', type=int, default=64)
 parser.add_argument('-r', '--runs', type=int, default=100)
 parser.add_argument('--scale', choices=['s', 'ms', 'us'], default='us')
 parser.add_argument('-c', '--cuda', action='store_true')
@@ -26,7 +26,8 @@ from attention import ATTENTION
 
 
 device = torch.device("cuda") if options.cuda else torch.device("cpu")
-dtype = torch.float64 if options.double else torch.float32
+dtype = torch.float64 if options.double else torch.float16
+
 
 kwargs = {'dtype': dtype,
           'device': device,
