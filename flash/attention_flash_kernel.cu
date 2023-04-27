@@ -62,21 +62,19 @@ __global__ void flash_kernel(
         }
         __syncthreads();
     }
-    QK_shared[row][col] = local/sqrt(m);
+    QK_shared[row][col] = __expf(local/sqrt(m));
     __syncthreads();
     float tsum = 0.0;
     for(int i = 0; i < BLOCK_SIZE; i++) {
         tsum+=QK_shared[row][i];
     }
     __syncthreads(); 
-    QK_shared[row][col] = __expf(local);
-    __syncthreads();
     for(int i = 0; i < (m+BLOCK_SIZE-1)/BLOCK_SIZE; i++) {
         lsum[batch][head][my_x+row][i*BLOCK_SIZE+col][my_y/BLOCK_SIZE] = tsum;
-        if(my_x+row<n&&col+i*BLOCK_SIZE<m){
-            V_shared[row][col] = v[batch][head][my_x+row][col+i*BLOCK_SIZE];
+        if(my_y+col<n&&row+i*BLOCK_SIZE<m){
+            V_shared[col][row] = v[batch][head][my_y+col][row+i*BLOCK_SIZE];
         } else {
-            V_shared[row][col] = 0.0;
+            V_shared[col][row] = 0.0;
         }
         __syncthreads();
         float colsum = 0;
@@ -117,7 +115,7 @@ __global__ void flash_reduce(
         esum += lsum[batch][head][my_x+row][my_y+col][i];
     }
     if(my_x+row<n&&my_y+col<m) {
-        fin[batch][head][my_x+row][my_y+col] = local/__expf(esum);
+        fin[batch][head][my_x+row][my_y+col] = local/esum;
     }
 }
 

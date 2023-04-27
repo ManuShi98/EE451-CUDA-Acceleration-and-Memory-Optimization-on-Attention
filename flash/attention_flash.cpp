@@ -1,6 +1,5 @@
 #include <vector>
 #include <torch/extension.h>
-#include <cub/cub.cuh>
 
 // Cuda declaration
 torch::Tensor flash_attention(
