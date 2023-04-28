@@ -26,15 +26,6 @@ only first time
     conda install nltk matplotlib jupyter
 
 ```
-sometimes it does not enter the conda environment, conda deactivate and activate environment.
+Sometimes it does not enter the conda environment, deactivating and then reactivating the conda environment may help.
 
-download dataset from https://www.kaggle.com/datasets/bittlingmayer/amazonreviews, unzip them into ./data
-prepare_npy.py, benchmark_train_*.py edited from https://github.com/iamirmasoud/amazon_sentiment/tree/main
-
-Execute in order:
-```
-mkdir data
-python prepare_npy.py
-python benchmark_train.py --attention_type cpp/cuda/fused
-```
 
