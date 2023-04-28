@@ -28,4 +28,5 @@ only first time
 ```
 Sometimes it does not enter the conda environment, deactivating and then reactivating the conda environment may help.
 
-
+block/ contains the standard block matrix multiplication implementation.
+flash/ contains the memory-optimized block matrix multiplication implementation.
