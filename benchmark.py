@@ -15,14 +15,17 @@ parser.add_argument('-b', '--batch-size', type=int, default=4)
 parser.add_argument('--head_num', type=int, default=8)
 parser.add_argument('-t', '--token_num', type=int, default=32)
 parser.add_argument('-f', '--features', type=int, default=64)
-parser.add_argument('-r', '--runs', type=int, default=1)
+parser.add_argument('-r', '--runs', type=int, default=100)
 parser.add_argument('--scale', choices=['s', 'ms', 'us'], default='ms')
 parser.add_argument('-c', '--cuda', default=True)
 parser.add_argument('-d', '--double', action='store_true')
+parser.add_argument('--attention_type', required=True)
 options = parser.parse_args()
 
-
-from attention import ATTENTION
+if options.attention_type == 'block':
+    from block.attention import ATTENTION
+if options.attention_type == 'flash':
+    from flash.attention import ATTENTION
 
 
 device = torch.device("cuda") if options.cuda else torch.device("cpu")
@@ -31,16 +34,14 @@ dtype = torch.float64 if options.double else torch.float32
 kwargs = {'dtype': dtype,
           'device': device,
           'requires_grad': True}
-
-
 forward_averages = []
 backward_averages = []
+
 att = ATTENTION().to(device, dtype)
 # for batch_size in range(1, 8):
 #     q = torch.randn(2**batch_size, options.head_num, options.token_num, options.features, **kwargs)
 #     k = torch.randn(2**batch_size, options.head_num, options.token_num, options.features, **kwargs)
 #     v = torch.randn(2**batch_size, options.head_num, options.token_num, options.features, **kwargs)
-#     v = torch.randn(batch_size, options.head_num, options.token_num, options.features, **kwargs)
 # for head_num in range(1, 17):
 #     q = torch.randn(options.batch_size, head_num, options.token_num, options.features, **kwargs)
 #     k = torch.randn(options.batch_size, head_num, options.token_num, options.features, **kwargs)
@@ -74,7 +75,7 @@ for token_num in range(5, 9):
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
         start_event.record()
-        output.sum().backward()
+        # output.sum().backward()
         end_event.record()
         torch.cuda.synchronize()
         elapsed = start_event.elapsed_time(end_event)
@@ -85,7 +86,7 @@ for token_num in range(5, 9):
         # elapsed = time.time() - start
         backward_min = min(backward_min, elapsed)
         backward_time += elapsed
-
+    
     
     scale = TIME_SCALES[options.scale]
     forward_min *= scale
@@ -99,4 +100,3 @@ for token_num in range(5, 9):
         options.scale))
 print(forward_averages)
 print(backward_averages)
-        

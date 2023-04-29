@@ -30,3 +30,8 @@ Sometimes it does not enter the conda environment, deactivating and then reactiv
 
 block/ contains the standard block matrix multiplication implementation.
 flash/ contains the memory-optimized block matrix multiplication implementation.
+
+Use following demands to benchmark:
+```
+python benchmark.py --attention_type block/flash
+```
