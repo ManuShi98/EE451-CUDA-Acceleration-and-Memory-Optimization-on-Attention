@@ -15,7 +15,7 @@ parser.add_argument('-b', '--batch-size', type=int, default=4)
 parser.add_argument('--head_num', type=int, default=8)
 parser.add_argument('-t', '--token_num', type=int, default=32)
 parser.add_argument('-f', '--features', type=int, default=64)
-parser.add_argument('-r', '--runs', type=int, default=100)
+parser.add_argument('-r', '--runs', type=int, default=1)
 parser.add_argument('--scale', choices=['s', 'ms', 'us'], default='ms')
 parser.add_argument('-c', '--cuda', default=True)
 parser.add_argument('-d', '--double', action='store_true')
@@ -45,7 +45,7 @@ att = ATTENTION().to(device, dtype)
 #     q = torch.randn(options.batch_size, head_num, options.token_num, options.features, **kwargs)
 #     k = torch.randn(options.batch_size, head_num, options.token_num, options.features, **kwargs)
 #     v = torch.randn(options.batch_size, head_num, options.token_num, options.features, **kwargs)
-for token_num in range(5, 13):
+for token_num in range(5, 9):
     q = torch.randn(options.batch_size, options.head_num, 2**token_num, options.features, **kwargs)
     k = torch.randn(options.batch_size, options.head_num, 2**token_num, options.features, **kwargs)
     v = torch.randn(options.batch_size, options.head_num, 2**token_num, options.features, **kwargs)
@@ -74,7 +74,7 @@ for token_num in range(5, 13):
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
         start_event.record()
-        # output.sum().backward()
+        output.sum().backward()
         end_event.record()
         torch.cuda.synchronize()
         elapsed = start_event.elapsed_time(end_event)
@@ -85,7 +85,7 @@ for token_num in range(5, 13):
         # elapsed = time.time() - start
         backward_min = min(backward_min, elapsed)
         backward_time += elapsed
-    
+
     
     scale = TIME_SCALES[options.scale]
     forward_min *= scale

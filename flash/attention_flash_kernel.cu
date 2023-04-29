@@ -96,6 +96,7 @@ __global__ void flash_reduce(
     torch::PackedTensorAccessor<scalar_t,5,torch::RestrictPtrTraits,size_t> lsum,
     torch::PackedTensorAccessor<scalar_t,5,torch::RestrictPtrTraits,size_t> output,
     torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> fin,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> esums,
     int batch_size, 
     int head_num, 
     int n, 
@@ -114,12 +115,13 @@ __global__ void flash_reduce(
         local += output[batch][head][my_x+row][my_y+col][i];
         esum += lsum[batch][head][my_x+row][my_y+col][i];
     }
+    esums[batch][head][my_x+row] = esum;
     if(my_x+row<n&&my_y+col<m) {
         fin[batch][head][my_x+row][my_y+col] = local/esum;
     }
 }
 
-torch::Tensor flash_attention(
+std::vector<torch::Tensor> flash_attention(
     torch::Tensor q,
     torch::Tensor k,
     torch::Tensor v,
@@ -147,6 +149,7 @@ torch::Tensor flash_attention(
         
     }));
     auto fin = torch::empty({batch_size, head_num, n, m}, torch::CUDA(torch::kFloat));
+    auto esums = torch::empty({batch_size, head_num, n}, torch::CUDA(torch::kFloat));
     dim3 reduceBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 reduceGrid((batch_size*head_num*n*m+reduceBlock.x*reduceBlock.y-1)/(reduceBlock.x*reduceBlock.y));
     AT_DISPATCH_FLOATING_TYPES(lsum.type(), "attention_reduce_cuda", ([&]{
@@ -154,11 +157,91 @@ torch::Tensor flash_attention(
             lsum.packed_accessor<scalar_t,5,torch::RestrictPtrTraits,size_t>(),
             output.packed_accessor<scalar_t,5,torch::RestrictPtrTraits,size_t>(),
             fin.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
+            esums.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             batch_size, 
             head_num, 
             n, 
             m
         );
     }));
-    return fin;
+    return {fin, esums};
+}
+
+// token_num and features can be divided by 32
+template <typename scalar_t>
+__global__ void matmul(
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> mat1,
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> mat2,
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> output,
+    int batch_size, 
+    int head_num, 
+    int n, 
+    int m,
+    int k, 
+    int limit) {
+    int row = threadIdx.y;//32
+    int col = threadIdx.x;//32
+    float local = 0;
+    int idx = blockIdx.x;
+    int batch = (idx/(n*k/(BLOCK_SIZE*BLOCK_SIZE)))/head_num;
+    int head = (idx/(n*k/(BLOCK_SIZE*BLOCK_SIZE)))%head_num;
+    int my_x = ((idx/(k/BLOCK_SIZE))%(n/BLOCK_SIZE))*BLOCK_SIZE;
+    int my_y = (idx%(k/BLOCK_SIZE))*BLOCK_SIZE;
+    //if (idx*BLOCK_SIZE*BLOCK_SIZE+row*m+col >= limit) {
+    //    return;
+    //}
+        
+    __shared__ float A_shared[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float B_shared[BLOCK_SIZE][BLOCK_SIZE];
+
+    for(int i = 0; i < (m+BLOCK_SIZE-1)/BLOCK_SIZE; i++) {
+        if(my_x+row<n&&col+i*BLOCK_SIZE<m){
+            A_shared[row][col] = mat1[batch][head][my_x+row][col+i*BLOCK_SIZE];
+        } else {
+            A_shared[row][col] = 0.0;
+        }
+        if(row+i*BLOCK_SIZE<m&&my_y+col<k) {
+            B_shared[row][col] = mat2[batch][head][row+i*BLOCK_SIZE][my_y+col];
+        } else {
+            B_shared[row][col] = 0.0;
+        }
+        __syncthreads();
+        for(int j = 0; j < BLOCK_SIZE; j++){
+            local+=A_shared[row][j] * B_shared[j][col];
+        }
+        __syncthreads();
+    }
+    if(my_x+row<n&&my_y+col<k) {
+        output[batch][head][my_x+row][my_y+col] = local;
+    }
+}
+
+torch::Tensor block_matmul_cuda(
+    torch::Tensor mat1,
+    torch::Tensor mat2,
+    int batch_size,
+    int head_num,
+    int n,
+    int m,
+    int k) {
+    
+    auto output = torch::empty({batch_size, head_num, n, k}, torch::CUDA(torch::kFloat));
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimGrid((batch_size*head_num*n*k+dimBlock.x*dimBlock.y-1)/(dimBlock.x*dimBlock.y));
+    AT_DISPATCH_FLOATING_TYPES(mat1.type(), "attention_forward_cuda", ([&]{
+        
+        matmul<scalar_t><<<dimGrid, dimBlock>>>(
+            mat1.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
+            mat2.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
+            output.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
+            batch_size, 
+            head_num, 
+            n, 
+            m,
+            k,
+            batch_size * head_num * n * k
+        );
+        
+    }));
+    return output;
 }
