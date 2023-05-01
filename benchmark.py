@@ -15,7 +15,7 @@ parser.add_argument('-b', '--batch-size', type=int, default=4)
 parser.add_argument('--head_num', type=int, default=8)
 parser.add_argument('-t', '--token_num', type=int, default=32)
 parser.add_argument('-f', '--features', type=int, default=64)
-parser.add_argument('-r', '--runs', type=int, default=100)
+parser.add_argument('-r', '--runs', type=int, default=1)
 parser.add_argument('--scale', choices=['s', 'ms', 'us'], default='ms')
 parser.add_argument('-c', '--cuda', default=True)
 parser.add_argument('-d', '--double', action='store_true')
@@ -38,6 +38,14 @@ forward_averages = []
 backward_averages = []
 
 att = ATTENTION().to(device, dtype)
+# for _ in range(25):
+#     q = torch.randn(options.batch_size, options.head_num, options.token_num, options.features, **kwargs)
+#     k = torch.randn(options.batch_size, options.head_num, options.token_num, options.features, **kwargs)
+#     v = torch.randn(options.batch_size, options.head_num, options.token_num, options.features, **kwargs)
+#     output = att(q, k, v)
+#     output.sum().backward()
+
+
 # for batch_size in range(1, 8):
 #     q = torch.randn(2**batch_size, options.head_num, options.token_num, options.features, **kwargs)
 #     k = torch.randn(2**batch_size, options.head_num, options.token_num, options.features, **kwargs)

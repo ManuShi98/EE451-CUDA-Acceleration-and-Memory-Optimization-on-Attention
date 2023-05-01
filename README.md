@@ -35,3 +35,12 @@ Use following demands to benchmark:
 ```
 python benchmark.py --attention_type block/flash
 ```
+
+Use NVIDIA Nsight Compute to profile the code.
+```
+cat /proc/sys/kernel/perf_event_paranoid
+sudo sh -c 'echo 0 >/proc/sys/kernel/perf_event_paranoid'
+sudo /usr/local/NVIDIA-Nsight-Compute-2023.1/ncu -f --set full -o block_report /home/scruple/miniconda3/envs/triton/bin/python benchmark.py --attention_type flash
+sudo /usr/local/NVIDIA-Nsight-Compute-2023.1/ncu -f --set full -o flash_report /home/scruple/miniconda3/envs/triton/bin/python benchmark.py --attention_type block
+/usr/local/NVIDIA-Nsight-Compute-2023.1/ncu-ui $report_file$
+```
